@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>捕獵與數目：瀕危物種模擬</title>
+<style>
+  :root {
+    --ink: #1a2420;
+    --muted: #5c675f;
+    --paper: #f4efe4;
+    --card: #fffdf8;
+    --green: #1e4d3a;
+    --green-2: #2f6b50;
+    --sand: #e7d7b8;
+    --line: #d9cbb3;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  }
+  header {
+    background: var(--green);
+    color: #f7f3ea;
+    padding: 14px 4vw 12px;
+  }
+  h1 { margin: 0; font-size: 1.7rem; font-weight: 700; letter-spacing: 0.04em; }
+  header p { margin: 6px 0 0; max-width: 52rem; line-height: 1.5; color: #e5efe8; font-size: 1.05rem; }
+  .hud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+    padding: 10px 4vw;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+  }
+  .pill {
+    background: #eef6f0;
+    border-radius: 999px;
+    padding: 4px 14px 4px 16px;
+    font-size: 1.05rem;
+  }
+  .pill b { font-size: 2rem; color: var(--green); font-variant-numeric: tabular-nums; }
+  .pill.zero { background: #efeae2; }
+  .pill.zero b { color: var(--muted); }
+  .pill.flash { background: #f3e6c8; }
+  #banner {
+    flex: 1 1 18rem;
+    margin: 0;
+    min-height: 1.4em;
+    font-size: 1.28rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--green);
+  }
+  #banner.miss { color: var(--ink); font-weight: 600; }
+  button {
+    font: inherit;
+    font-size: 1.05rem;
+    cursor: pointer;
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 20px;
+    background: var(--sand);
+    color: var(--ink);
+  }
+  button:focus-visible { outline: 3px solid #1e4d3a; outline-offset: 2px; }
+  #field {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 420px;
+    overflow: hidden;
+    cursor: none;
+    background: linear-gradient(180deg, #d5ead8 0%, #b7d7a4 38%, #8fb56a 100%);
+    touch-action: none;
+    user-select: none;
+  }
+  .pond {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 36%;
+    background:
+      radial-gradient(ellipse at 42% 58%, rgba(255, 255, 255, 0.28) 0%, transparent 42%),
+      linear-gradient(180deg, #8ec4dc 0%, #3f86ae 55%, #2d6e96 100%);
+    border-right: 8px solid rgba(47, 93, 63, 0.18);
+    pointer-events: none;
+  }
+  .zone-name {
+    position: absolute;
+    top: 12px;
+    z-index: 1;
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    pointer-events: none;
+  }
+  .zone-name.turtle { left: 2.2%; color: #f7f3ea; }
+  .zone-name.tiger { left: 42%; color: #1e4d3a; }
+  .zone-name.elephant { left: 70%; color: #1e4d3a; }
+  .animal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .animal svg { width: 100%; height: 100%; display: block; }
+  #hunter {
+    position: absolute;
+    z-index: 3;
+    width: 76px;
+    transform: translate(-50%, -100%);
+    text-align: center;
+    pointer-events: none;
+  }
+  #hunter .head {
+    width: 22px;
+    height: 22px;
+    margin: 0 auto 2px;
+    border: 2px solid #1a2420;
+    border-radius: 50%;
+    background: #f3d2b5;
+  }
+  #hunter .torso {
+    width: 36px;
+    height: 28px;
+    margin: 0 auto;
+    border-radius: 12px 12px 7px 7px;
+    background: #1e4d3a;
+  }
+  #hunter .tag {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(255, 253, 248, 0.92);
+    color: #1e4d3a;
+    font-weight: 700;
+  }
+  #aim {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    pointer-events: none;
+  }
+  #sight {
+    position: absolute;
+    z-index: 5;
+    width: 78px;
+    height: 78px;
+    margin: -39px 0 0 -39px;
+    border: 3px solid #fffdf8;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(30, 77, 58, 0.55);
+    pointer-events: none;
+  }
+  #sight::before,
+  #sight::after {
+    content: "";
+    position: absolute;
+    background: #fffdf8;
+    box-shadow: 0 0 0 1px rgba(30, 77, 58, 0.45);
+  }
+  #sight::before { left: 50%; top: 10px; bottom: 10px; width: 2px; margin-left: -1px; }
+  #sight::after { top: 50%; left: 10px; right: 10px; height: 2px; margin-top: -1px; }
+  #sight span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+    border-radius: 50%;
+    background: #1e4d3a;
+  }
+  #pellet {
+    position: absolute;
+    z-index: 5;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border: 3px solid #1e4d3a;
+    border-radius: 50%;
+    background: #fffdf8;
+    pointer-events: none;
+  }
+  footer {
+    margin: 0;
+    padding: 8px 4vw 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    background: var(--paper);
+  }
+  @media (max-width: 720px) {
+    header, .hud, footer { padding-left: 16px; padding-right: 16px; }
+    h1 { font-size: 1.35rem; }
+    #banner { font-size: 1.05rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>捕獵與數目</h1>
+  <p>這是課堂上的模擬。你是獵人。對準動物按一下，射中才少一隻。沒有射中，數目不變。重新開始，或再打開這個檔案，數目會回到原來一樣。</p>
+</header>
+<div class="hud">
+  <span class="pill" id="pill-turtle">海龜 <b id="n-turtle">8</b></span>
+  <span class="pill" id="pill-tiger">老虎 <b id="n-tiger">6</b></span>
+  <span class="pill" id="pill-elephant">大象 <b id="n-elephant">6</b></span>
+  <span class="pill" id="pill-total">一共 <b id="total">20</b></span>
+  <p id="banner">對準動物，按一下。射中才少一隻。</p>
+  <button id="reset" type="button">重新開始</button>
+</div>
+<div id="field" role="application" aria-label="捕獵模擬。你是獵人。對準動物按一下，射中才少一隻。">
+  <div class="pond"></div>
+  <p class="zone-name turtle">海龜</p>
+  <p class="zone-name tiger">老虎</p>
+  <p class="zone-name elephant">大象</p>
+  <div id="hunter" aria-hidden="true">
+    <div class="head"></div>
+    <div class="torso"></div>
+    <div class="tag">獵人</div>
+  </div>
+  <svg id="aim" aria-hidden="true">
+    <line id="aim-line" x1="0" y1="0" x2="0" y2="0" stroke="#1e4d3a" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="7 8"></line>
+  </svg>
+  <div id="sight" hidden><span></span></div>
+  <div id="pellet" hidden></div>
+</div>
+<footer>每一次射中，那種動物就少一隻。人類為了龜殼、蛋、肉、虎皮、虎骨和象牙而捕獵，動物的數目便下降。</footer>
+<script>
+function startingHerd() {
+  return [
+    { id: "turtle", name: "海龜", count: 8, taken: "人們獵取龜殼、蛋和肉" },
+    { id: "tiger", name: "老虎", count: 6, taken: "人們獵取虎皮和虎骨" },
+    { id: "elephant", name: "大象", count: 6, taken: "人們獵取象牙" }
+  ];
+}
+
+function hunt(herd, id) {
+  return herd.map(function (animal) {
+    var count = animal.count;
+    if (animal.id === id && count > 0) count = count - 1;
+    return { id: animal.id, name: animal.name, count: count, taken: animal.taken };
+  });
+}
+
+function totalCount(herd) {
+  return herd.reduce(function (sum, animal) { return sum + animal.count; }, 0);
+}
+
+function shotHits(shotX, shotY, actorX, actorY, radius) {
+  var dx = shotX - actorX;
+  var dy = shotY - actorY;
+  return (dx * dx + dy * dy) <= (radius * radius);
+}
+
+function resolveImpact(herd, actors, shotX, shotY) {
+  for (var i = 0; i < actors.length; i++) {
+    var actor = actors[i];
+    if (actor.fading) continue;
+    if (shotHits(shotX, shotY, actor.x, actor.y, actor.size * 0.45)) {
+      return { herd: hunt(herd, actor.id), index: i };
+    }
+  }
+  return { herd: herd, index: -1 };
+}
+
+var ICONS = {
+  turtle: '<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="36" rx="18" ry="14" fill="#2f6b50"/><ellipse cx="32" cy="36" rx="10" ry="8" fill="#d7eccf"/><circle cx="48" cy="34" r="6" fill="#1e4d3a"/><circle cx="50" cy="33" r="1.2" fill="#fff"/><path d="M16 30l-8-6M16 40l-8 6M28 22l-4-8M38 22l4-8" stroke="#1e4d3a" stroke-width="3" stroke-linecap="round"/></svg>',
+  tiger: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 40c6-16 16-22 26-18 4 8 2 16-2 20-8 2-16 2-24-2z" fill="#e7a04a"/><path d="M18 30c2 4 2 8 0 12M26 28c2 5 2 9 0 14M34 30c1 4 1 8 0 11" stroke="#1a2420" stroke-width="2" fill="none"/><circle cx="44" cy="30" r="8" fill="#e7a04a"/><circle cx="47" cy="29" r="1.3" fill="#1a2420"/><path d="M40 22l-2-7M48 22l3-7" stroke="#e7a04a" stroke-width="3" stroke-linecap="round"/><path d="M14 44c8 8 20 8 28 2" stroke="#1a2420" stroke-width="2" fill="none"/></svg>',
+  elephant: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 38c0-12 10-20 22-20 10 0 16 6 16 14v8c0 4-4 8-8 8h-4v6h-8v-8H22c-4 0-8-3-8-8z" fill="#8d98a3"/><path d="M40 36c2 8 2 14 0 20" stroke="#6d7882" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="30" cy="32" r="1.4" fill="#1a2420"/><path d="M18 28c6-2 8 2 6 5" stroke="#f4efe4" stroke-width="2" fill="none"/><path d="M46 24l6-8" stroke="#f2f0ea" stroke-width="3" stroke-linecap="round"/></svg>'
+};
+
+var ZONES = {
+  turtle: { x0: 0.03, x1: 0.33, y0: 0.12, y1: 0.70 },
+  tiger: { x0: 0.40, x1: 0.64, y0: 0.12, y1: 0.70 },
+  elephant: { x0: 0.68, x1: 0.96, y0: 0.12, y1: 0.70 }
+};
+
+var root = typeof window !== "undefined" ? window : globalThis;
+root.startingHerd = startingHerd;
+root.hunt = hunt;
+root.totalCount = totalCount;
+root.shotHits = shotHits;
+root.resolveImpact = resolveImpact;
+
+function boot() {
+  var field = document.getElementById("field");
+  var reset = document.getElementById("reset");
+  var banner = document.getElementById("banner");
+  var sight = document.getElementById("sight");
+  var pellet = document.getElementById("pellet");
+  var aimLine = document.getElementById("aim-line");
+  var hunter = document.getElementById("hunter");
+  if (!field || !reset || !banner || !sight || !pellet || !aimLine || !hunter) return;
+
+  var herd = startingHerd();
+  var actors = [];
+  var shot = null;
+  var frozenUntil = 0;
+  var flashId = "";
+  var hunterX = 0;
+  var hunterY = 0;
+  var originY = 0;
+  var lastW = 0;
+  var lastH = 0;
+  var pointerX = 0;
+  var pointerY = 0;
+  var pointerOn = false;
+  var reduceMotion = false;
+  var motionQuery = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  if (motionQuery) {
+    reduceMotion = !!motionQuery.matches;
+    var onMotion = function () { reduceMotion = !!motionQuery.matches; };
+    if (motionQuery.addEventListener) motionQuery.addEventListener("change", onMotion);
+    else if (motionQuery.addListener) motionQuery.addListener(onMotion);
+  }
+
+  function animalById(id) {
+    for (var i = 0; i < herd.length; i++) {
+      if (herd[i].id === id) return herd[i];
+    }
+    return null;
+  }
+
+  function showBanner(text, kind) {
+    banner.textContent = text;
+    banner.className = kind === "miss" ? "miss" : "";
+  }
+
+  function renderHud() {
+    herd.forEach(function (animal) {
+      var count = document.getElementById("n-" + animal.id);
+      var pill = document.getElementById("pill-" + animal.id);
+      if (count) count.textContent = String(animal.count);
+      if (pill) {
+        pill.classList.toggle("zero", animal.count === 0);
+        pill.classList.toggle("flash", animal.id === flashId);
+      }
+    });
+    var total = document.getElementById("total");
+    if (total) total.textContent = String(totalCount(herd));
+  }
+
+  function spriteSize(id, fieldW) {
+    var base = id === "elephant" ? 86 : id === "tiger" ? 76 : 68;
+    var scale = Math.max(0.72, Math.min(1, fieldW / 1280));
+    return Math.round(base * scale);
+  }
+
+  function clearActors() {
+    actors.forEach(function (actor) {
+      if (actor.el) actor.el.remove();
+    });
+    actors = [];
+  }
+
+  function placeHunter() {
+    var rect = field.getBoundingClientRect();
+    hunterX = rect.width / 2;
+    hunterY = rect.height - 8;
+    originY = hunterY - 58;
+    hunter.style.left = hunterX + "px";
+    hunter.style.top = hunterY + "px";
+  }
+
+  function spawnActors() {
+    clearActors();
+    var rect = field.getBoundingClientRect();
+    lastW = rect.width;
+    lastH = rect.height;
+    placeHunter();
+    herd.forEach(function (animal) {
+      var zone = ZONES[animal.id];
+      var count = animal.count;
+      var cols = count > 6 ? 4 : 3;
+      var rows = Math.ceil(count / cols) || 1;
+      var size = spriteSize(animal.id, rect.width);
+      for (var i = 0; i < count; i++) {
+        var col = i % cols;
+        var row = Math.floor(i / cols);
+        var x = (zone.x0 + (zone.x1 - zone.x0) * ((col + 0.5) / cols)) * rect.width;
+        var y = (zone.y0 + (zone.y1 - zone.y0) * ((row + 0.5) / rows)) * rect.height;
+        var speed = 0.45 + (i % 5) * 0.1;
+        var angle = (i * 2.4) % (Math.PI * 2);
+        var el = document.createElement("div");
+        el.className = "animal " + animal.id;
+        el.setAttribute("data-id", animal.id);
+        el.setAttribute("aria-hidden", "true");
+        el.innerHTML = ICONS[animal.id];
+        el.style.width = size + "px";
+        el.style.height = size + "px";
+        field.appendChild(el);
+        actors.push({
+          id: animal.id,
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: size,
+          opacity: 1,
+          fading: false,
+          fadeStart: 0,
+          el: el
+        });
+      }
+    });
+    paintActors();
+  }
+
+  function paintActors() {
+    actors.forEach(function (actor) {
+      var face = actor.vx >= 0 ? 1 : -1;
+      var left = actor.x - actor.size / 2;
+      var top = actor.y - actor.size / 2;
+      actor.el.style.transform = "translate(" + left + "px," + top + "px) scaleX(" + face + ")";
+      actor.el.style.opacity = String(actor.opacity);
+    });
+  }
+
+  function moveActors(w, h, step) {
+    actors.forEach(function (actor) {
+      if (actor.fading) return;
+      var zone = ZONES[actor.id];
+      var pad = actor.size * 0.42;
+      actor.x += actor.vx * step;
+      actor.y += actor.vy * step;
+      var minX = zone.x0 * w + pad;
+      var maxX = zone.x1 * w - pad;
+      var minY = zone.y0 * h + pad;
+      var maxY = Math.min(zone.y1 * h, h - 100) - pad;
+      if (maxX < minX) maxX = minX;
+      if (maxY < minY) maxY = minY;
+      if (actor.x < minX) { actor.x = minX; actor.vx = Math.abs(actor.vx); }
+      if (actor.x > maxX) { actor.x = maxX; actor.vx = -Math.abs(actor.vx); }
+      if (actor.y < minY) { actor.y = minY; actor.vy = Math.abs(actor.vy); }
+      if (actor.y > maxY) { actor.y = maxY; actor.vy = -Math.abs(actor.vy); }
+    });
+  }
+
+  function fadeActors(now) {
+    var alive = [];
+    actors.forEach(function (actor) {
+      if (actor.fading) {
+        var t = (now - actor.fadeStart) / 420;
+        actor.opacity = t >= 1 ? 0 : 1 - t;
+        if (t >= 1) {
+          actor.el.remove();
+          return;
+        }
+      }
+      alive.push(actor);
+    });
+    actors = alive;
+  }
+
+  function hidePellet() {
+    pellet.hidden = true;
+  }
+
+  function localPoint(event) {
+    var rect = field.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function fire(x, y) {
+    if (shot || performance.now() < frozenUntil) return;
+    var dx = x - hunterX;
+    var dy = y - originY;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 28) return;
+    var speed = 16;
+    shot = { x: hunterX, y: originY, vx: dx / len * speed, vy: dy / len * speed };
+    pellet.hidden = false;
+    pellet.style.left = shot.x + "px";
+    pellet.style.top = shot.y + "px";
+  }
+
+  function missBanner() {
+    showBanner("沒有射中。數目沒有變。", "miss");
+  }
+
+  function hitBanner(id) {
+    var animal = animalById(id);
+    var line = "射中" + animal.name + "。還有 " + animal.count + " 隻。";
+    if (animal.count === 0) line += "這一群在這次模擬裏已經沒有了。";
+    if (totalCount(herd) === 0) line += "這次模擬的動物已經沒有了。按重新開始，數目回到原來一樣。";
+    showBanner(line, "hit");
+  }
+
+  function stepShot(w, h, step) {
+    if (!shot) return;
+    var x0 = shot.x;
+    var y0 = shot.y;
+    shot.x += shot.vx * step;
+    shot.y += shot.vy * step;
+    var samples = 6;
+    for (var s = 1; s <= samples; s++) {
+      var t = s / samples;
+      var sx = x0 + (shot.x - x0) * t;
+      var sy = y0 + (shot.y - y0) * t;
+      var impact = resolveImpact(herd, actors, sx, sy);
+      if (impact.index >= 0) {
+        var actor = actors[impact.index];
+        herd = impact.herd;
+        actor.fading = true;
+        actor.fadeStart = performance.now();
+        flashId = actor.id;
+        shot = null;
+        frozenUntil = performance.now() + 800;
+        hidePellet();
+        hitBanner(actor.id);
+        renderHud();
+        return;
+      }
+    }
+    if (shot.x < -40 || shot.y < -40 || shot.x > w + 40 || shot.y > h + 40) {
+      shot = null;
+      hidePellet();
+      missBanner();
+      return;
+    }
+    pellet.style.left = shot.x + "px";
+    pellet.style.top = shot.y + "px";
+  }
+
+  function aimAt(x, y) {
+    pointerX = x;
+    pointerY = y;
+    pointerOn = true;
+    sight.hidden = false;
+    sight.style.left = x + "px";
+    sight.style.top = y + "px";
+    aimLine.setAttribute("x1", String(hunterX));
+    aimLine.setAttribute("y1", String(originY));
+    aimLine.setAttribute("x2", String(x));
+    aimLine.setAttribute("y2", String(y));
+  }
+
+  field.addEventListener("pointermove", function (event) {
+    var point = localPoint(event);
+    aimAt(point.x, point.y);
+  });
+
+  field.addEventListener("pointerleave", function () {
+    pointerOn = false;
+    sight.hidden = true;
+    aimLine.setAttribute("x2", String(hunterX));
+    aimLine.setAttribute("y2", String(originY));
+  });
+
+  field.addEventListener("pointerdown", function (event) {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    var point = localPoint(event);
+    aimAt(point.x, point.y);
+    fire(point.x, point.y);
+  });
+
+  field.addEventListener("contextmenu", function (event) {
+    event.preventDefault();
+  });
+
+  reset.addEventListener("click", function () {
+    herd = startingHerd();
+    shot = null;
+    frozenUntil = 0;
+    flashId = "";
+    hidePellet();
+    spawnActors();
+    renderHud();
+    showBanner("數目回到原來一樣。海龜 8 隻、老虎 6 隻、大象 6 隻。", "hit");
+  });
+
+  window.addEventListener("resize", function () {
+    var rect = field.getBoundingClientRect();
+    if (lastW > 0 && lastH > 0 && rect.width > 0 && rect.height > 0) {
+      var sx = rect.width / lastW;
+      var sy = rect.height / lastH;
+      actors.forEach(function (actor) {
+        actor.x *= sx;
+        actor.y *= sy;
+      });
+      lastW = rect.width;
+      lastH = rect.height;
+    }
+    placeHunter();
+    if (pointerOn) aimAt(pointerX, pointerY);
+  });
+
+  var lastTime = 0;
+  function loop(now) {
+    var dt = lastTime ? now - lastTime : 16.67;
+    lastTime = now;
+    var step = Math.min(dt / 16.67, 2.5);
+    var rect = field.getBoundingClientRect();
+    var frozen = now < frozenUntil;
+    if (!frozen && flashId) {
+      flashId = "";
+      renderHud();
+    }
+    if (!frozen && !reduceMotion) moveActors(rect.width, rect.height, step);
+    if (!frozen) stepShot(rect.width, rect.height, step);
+    fadeActors(now);
+    paintActors();
+    requestAnimationFrame(loop);
+  }
+
+  function start() {
+    var rect = field.getBoundingClientRect();
+    if (rect.height < 40 || rect.width < 40) {
+      requestAnimationFrame(start);
+      return;
+    }
+    spawnActors();
+    renderHud();
+    aimAt(lastW * 0.52, lastH * 0.32);
+    showBanner("對準動物，按一下。射中才少一隻。", "hit");
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(start);
+}
+
+if (typeof document !== "undefined" && document.getElementById) boot();
+</script>
+</body>
+</html>
